@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+
 #include <math_vector.hpp>
+#include <math_matrix.hpp>
 #include <file.hpp>
+
 #define NUMVERTS 6
 
 static void RenderSceneCB();
@@ -18,6 +21,7 @@ int main(int, char**);
 std::string vfn = "./src/vertex.vs", ffn = "./src/fragment.fs";
 GLuint VBO;
 GLint gScaleLocation;
+GLint translationLocation;
 Vec3f vertices[NUMVERTS];
 
 // Function that actually draws the screen, called repeatedly in the main loop during drawing phases
@@ -26,14 +30,29 @@ static void RenderSceneCB() {
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	// Update screen here
-	static GLfloat gScale = 0.5f;
+	static GLfloat gScale = 0.0f;
 	static GLfloat delta = -0.0001f;
-
-	if (gScale >= 1.0f || gScale <= 0.5f) {
+	
+	if ((vertices[5].x + gScale) >= 1.0f || (vertices[0].x + gScale) <= -1.0f) {
 		delta *= -1;
 	}
+	
+//	if (mScale >= 1.0f || mScale <= -1.0f) {
+//		mDelta *= -1;
+//	}
 
+	GLfloat scale = abs(gScale) / 2.0f + 0.5f;
+
+	Matrix4f translation = Matrix4f(
+		scale,0,0,scale,
+		0,scale,0,0,
+		0,0,1,0,
+		0,0,0,1
+	);
+
+	glUniformMatrix4fv(translationLocation, 1, GL_TRUE, &(translation.m[0][0]));
 	glUniform1f(gScaleLocation, gScale);
+
 
 	gScale += delta;
 
@@ -199,7 +218,7 @@ int main(int argc, char** argv) {
 	glutInitWindowPosition(pos[0], pos[1]);
 
 	int window = glutCreateWindow("Point Example");
-	std::cout << "Window ID: " << window << std::endl;
+	//std::cout << "Window ID: " << window << std::endl;
 
 	GLenum res = glewInit();
 	if (res != GLEW_OK) {
