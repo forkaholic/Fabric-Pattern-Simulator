@@ -1,28 +1,24 @@
+#include <gl/glew.h>
+#include <gl/freeglut.h>
+
 #include <iostream>
 #include <stdio.h>
-#include <GL/glew.h>
-#include <GL/freeglut.h>
-
-#include <math_vector.hpp>
-#include <math_matrix.hpp>
-#include <file.hpp>
-
+#include <shaderfuncs.hpp>
+#include <vector.hpp>
+#include <Math/matrix.hpp>
+#include <Math/point.hpp>
+#define _USE_MATH_DEFINES
+#include <math.h>
 #define NUMVERTS 6
 
 static void RenderSceneCB();
-static void CompileShaders();
 static void CreateVertexBuffer();
-static void AddShader(GLuint, const char*, GLenum);
-static void ReadShaderFile(std::string, std::string&);
-static ReadVertShader(std::string);
 int main(int, char**);
 
-
-std::string vfn = "./src/vertex.vs", ffn = "./src/fragment.fs";
-GLuint VBO;
-GLint gScaleLocation;
-GLint translationLocation;
-Vec3f vertices[NUMVERTS];
+GLuint VBO[1];
+Point vertices[NUMVERTS];
+extern GLint gScaleLocation;
+extern GLint transformationLocation;
 
 // Function that actually draws the screen, called repeatedly in the main loop during drawing phases
 static void RenderSceneCB() {
@@ -31,33 +27,23 @@ static void RenderSceneCB() {
 
 	// Update screen here
 	static GLfloat gScale = 0.0f;
-	static GLfloat delta = -0.0001f;
-	
-	if ((vertices[5].x + gScale) >= 1.0f || (vertices[0].x + gScale) <= -1.0f) {
-		delta *= -1;
-	}
-	
-//	if (mScale >= 1.0f || mScale <= -1.0f) {
-//		mDelta *= -1;
-//	}
+	static GLfloat delta = -0.001f;
+	static GLfloat rads = 0.0f;
+	const GLfloat rDelta = 0.001f;
 
-	GLfloat scale = abs(gScale) / 2.0f + 0.5f;
+	if (rads >= 60 * M_PI) rads = 0;
 
-	Matrix4f translation = Matrix4f(
-		scale,0,0,scale,
-		0,scale,0,0,
-		0,0,1,0,
-		0,0,0,1
-	);
+	Matrix4f transformation = CreateRotationMatrix(rads/5, rads/12, 0);
 
-	glUniformMatrix4fv(translationLocation, 1, GL_TRUE, &(translation.m[0][0]));
+	glUniformMatrix4fv(transformationLocation, 1, GL_TRUE, &(transformation.m[0][0]));
 	glUniform1f(gScaleLocation, gScale);
 
+	if (gScale <= -1.0f || gScale >= 1.0f) delta *= -1;
 
 	gScale += delta;
-
+	rads += rDelta;
 	// Bind the gl array buffer to the global VBO object
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
 
 	// Enable changing of position (attribute 0)
 	glEnableVertexAttribArray(0);
@@ -75,101 +61,10 @@ static void RenderSceneCB() {
 	glutPostRedisplay();
 }
 
-// Basic read function, get results from out_str
-static void ReadShaderFile(std::string filename, std::string& out_str) {
-	File file{ filename };
-	file.read();
-	out_str = file.contents;
-}
 
-// This process works for all types of shaders
-static void AddShader(GLuint program, const char* contents, GLenum type) {
-	GLuint shader_obj = glCreateShader(type);
 
-	if (shader_obj == 0) {
-		fprintf(stderr, "Error creating shader type %d\n", type);
-		exit(0);
-	}
-	const GLchar* p[1] = { contents };
-	GLint lengths[1] = { strlen(contents) };
 
-	// Get all source files and load them into shader obj
-	glShaderSource(shader_obj, 1, p, lengths);
 
-	// Compile all source files in shader obj
-	glCompileShader(shader_obj);
-
-	// Check that compilation was successful
-	GLint success;
-	glGetShaderiv(shader_obj, GL_COMPILE_STATUS, &success);
-
-	if (!success) {
-		// Error log
-		GLchar info_log[1024];
-		glGetShaderInfoLog(shader_obj, 1024, NULL, info_log);
-		fprintf(stderr, "Failed to compile shader type %d with following error: %s\n", type, info_log);
-		exit(1);
-	}
-
-	// Attach fully compiled and check shader obj to program
-	glAttachShader(program, shader_obj);
-}
-
-static void CompileShaders() {
-
-	GLuint shader = glCreateProgram();
-	
-	if (shader == 0) {
-		fprintf(stderr, "Error creating shader");
-	}
-
-	std::string fs, vs;
-	
-	ReadShaderFile(vfn, vs);
-
-	if (vs.empty()) {
-		fprintf(stderr, "Failed to read vertex shader\n");
-		exit(1);
-	}
-
-	AddShader(shader, vs.c_str(), GL_VERTEX_SHADER);
-
-	ReadShaderFile(ffn, fs);
-
-	if (fs.empty()) {
-		fprintf(stderr, "Failed to read fragment shader\n");
-		exit(1);
-	}
-	
-	AddShader(shader, fs.c_str(), GL_FRAGMENT_SHADER);
-
-	GLint success = 0;
-	GLchar log[1024] = {0};
-	glLinkProgram(shader);
-
-	glGetProgramiv(shader, GL_LINK_STATUS, &success);
-	if (success == 0) {
-		glGetProgramInfoLog(shader, sizeof(log), NULL, log);
-		fprintf(stderr, "Failed to link shader: %s\n", log);
-		exit(1);
-	}
-	
-	gScaleLocation = glGetUniformLocation(shader, "gScale");
-	if (gScaleLocation == -1) {
-		printf("Error getting location of gScale\n");
-		exit(1);
-	}
-
-	glValidateProgram(shader);
-	glGetProgramiv(shader, GL_VALIDATE_STATUS, &success);
-	if (success == 0) {
-		glGetProgramInfoLog(shader, sizeof(log), NULL, log);
-		fprintf(stderr, "Failed to validate shader: %s\n", log);
-		exit(1);
-	}
-	
-	glUseProgram(shader);
-}
 
 
 static void CreateVertexBuffer() {
@@ -202,8 +97,8 @@ static void CreateVertexBuffer() {
 	vertices[5] = {  0.66f,  0.66f, 0.0f };  //right
 
 	// Number of handles, pointer to GLuint array for x handles
-	glGenBuffers(1, &VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glGenBuffers(1, VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
 }
 
